@@ -1,0 +1,149 @@
+﻿@page "/app/{ProjectName}"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Web
+@using ProjectManager.Components.Pages.ProjectHandler.Components
+@using ProjectManager.Components.Pages.ProjectHandler.Tabs
+@using ProjectManager.Services
+@using Microsoft.JSInterop
+@inject IGitHubService GitHubService
+@inject IHttpContextAccessor HttpContextAccessor
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+
+<div style="position:fixed; top:3.5rem; left:0; right:0; bottom:0; display:flex; flex-direction:column; overflow:hidden; background:#fff;">
+    <TopBar ProjectName="@ProjectName" CurrentTab="@CurrentTab" OnTabChange="@ChangeTab" OnBack="@BackToList" />
+
+    <div style="flex:1 1 auto; display:flex; overflow:hidden; position:relative;">
+        <CommitsSidebar @ref="CommitsRef" 
+                       Width="@LeftSidebarWidth" 
+                       ProjectName="@ProjectName" 
+                       GitHubService="@GitHubService" 
+                       HttpContextAccessor="@HttpContextAccessor" />
+
+        <DragHandle OnDragStart="@StartLeftDrag" />
+
+        <MainContent CurrentTab="@CurrentTab"
+                    ProjectName="@ProjectName"
+                    Details="@_details"
+                    Contributors="@_contributors"
+                    RootContents="@_rootContents"
+                    GitHubService="@GitHubService"
+                    HttpContextAccessor="@HttpContextAccessor" />
+
+        <DragHandle OnDragStart="@StartRightDrag" />
+
+        <ChatSidebar Width="@RightSidebarWidth" />
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string? ProjectName { get; set; }
+
+    private string CurrentTab { get; set; } = "Create";
+    private int LeftSidebarWidth = 250;
+    private int RightSidebarWidth = 768;
+    private bool _isLeftDragging = false;
+    private bool _isRightDragging = false;
+    private double _startX;
+    private int _startLeftWidth;
+    private int _startRightWidth;
+    private GitHubRepoDetails? _details;
+    private IEnumerable<GitHubContributor>? _contributors;
+    private IEnumerable<GitHubContent>? _rootContents;
+    private CommitsSidebar? CommitsRef;
+    private DotNetObjectReference<ProjectDetails>? objRef;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var accessToken = await HttpContextAccessor.HttpContext!
+                .GetTokenAsync("access_token");
+
+            if (string.IsNullOrEmpty(accessToken) || ProjectName == null)
+            {
+                return;
+            }
+
+            var detailsTask = GitHubService.GetRepositoryDetailsAsync(accessToken, ProjectName);
+            var contributorsTask = GitHubService.GetRepositoryContributorsAsync(accessToken, ProjectName);
+            var contentsTask = GitHubService.GetRepositoryContentsAsync(accessToken, ProjectName);
+
+            await Task.WhenAll(detailsTask, contributorsTask, contentsTask);
+
+            _details = await detailsTask;
+            _contributors = await contributorsTask;
+            _rootContents = await contentsTask;
+        }
+        catch
+        {
+            // Error handling managed by child components
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            objRef = DotNetObjectReference.Create(this);
+            await JSRuntime.InvokeVoidAsync("setDotNetRef", objRef);
+        }
+    }
+
+    private void BackToList() => NavigationManager.NavigateTo("/app");
+
+    private void ChangeTab(string tab)
+    {
+        CurrentTab = tab;
+        var uri = new Uri(NavigationManager.Uri);
+        var baseUri = uri.GetLeftPart(UriPartial.Path);
+        var newUri = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(baseUri, "tab", tab);
+        NavigationManager.NavigateTo(newUri, forceLoad: false);
+    }
+
+    private void StartLeftDrag(MouseEventArgs e)
+    {
+        _isLeftDragging = true;
+        _startX = e.ClientX;
+        _startLeftWidth = LeftSidebarWidth;
+        JSRuntime.InvokeVoidAsync("addGlobalListeners");
+    }
+
+    private void StartRightDrag(MouseEventArgs e)
+    {
+        _isRightDragging = true;
+        _startX = e.ClientX;
+        _startRightWidth = RightSidebarWidth;
+        JSRuntime.InvokeVoidAsync("addGlobalListeners");
+    }
+
+    [JSInvokable]
+    public void OnGlobalMouseMove(double clientX)
+    {
+        if (_isLeftDragging)
+        {
+            var delta = clientX - _startX;
+            LeftSidebarWidth = Math.Max(150, _startLeftWidth + (int)delta);
+            StateHasChanged();
+        }
+        else if (_isRightDragging)
+        {
+            var delta = clientX - _startX;
+            RightSidebarWidth = Math.Max(200, _startRightWidth - (int)delta);
+            StateHasChanged();
+        }
+    }
+
+    [JSInvokable]
+    public void OnGlobalMouseUp()
+    {
+        _isLeftDragging = false;
+        _isRightDragging = false;
+        JSRuntime.InvokeVoidAsync("removeGlobalListeners");
+        StateHasChanged();
+    }
+}

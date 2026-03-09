@@ -1,0 +1,57 @@
+﻿@using Microsoft.AspNetCore.Components.Authorization
+@inherits LayoutComponentBase
+@inject IJSRuntime JS
+
+<div class="page">
+    <main>
+        <div class="top-row px-4" style="display: flex; align-items: center;">
+            <!-- Project Manager Button -->
+            <a href="/" class="project-manager-link" style="margin-right: auto; font-size: 22px; font-weight: normal; text-decoration: none; color: black;">
+                Project Manager
+            </a>
+
+            <AuthorizeView>
+                <Authorized>
+                    <!-- User Avatar with Link to /app -->
+                    <a href="/app" style="display: flex; align-items: center; text-decoration: none; color: black;">
+                        <img src="https://github.com/@(context.User.Identity?.Name).png"
+                             style="width: 32px; height: 32px; border-radius: 50%; margin-right: 10px;" />
+                        <span style="margin-right: 10px;">@context.User.Identity?.Name</span>
+                    </a>
+                    <a href="/logout" style="text-decoration: none; color: black;">Logout</a>
+                </Authorized>
+
+                <NotAuthorized>
+                    <a href="app" onclick="reloadPage()">Login with GitHub</a>
+                </NotAuthorized>
+            </AuthorizeView>
+        </div>
+
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>
+
+<div id="blazor-error-ui">
+    An unhandled error has occurred.
+    <a href="" class="reload">Reload</a>
+    <a class="dismiss">🗙</a>
+</div>
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Define the reloadPage JavaScript function
+            await JS.InvokeVoidAsync("eval", @"
+                window.reloadPage = function() {
+                    setTimeout(function() {
+                        window.location.reload();
+                    }, 000); // Slight delay to ensure any required redirects or operations
+                }
+            ");
+        }
+    }
+}

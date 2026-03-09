@@ -1,0 +1,7 @@
+﻿<div style="width:5px; cursor:col-resize; background:#ddd; flex:0 0 auto;"
+     @onmousedown="@OnDragStart">
+</div>
+
+@code {
+    [Parameter] public EventCallback<MouseEventArgs> OnDragStart { get; set; }
+}

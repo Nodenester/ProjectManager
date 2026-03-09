@@ -1,0 +1,106 @@
+﻿@page "/app"
+@attribute [Authorize]
+@inject IGitHubService GitHubService
+@inject IHttpContextAccessor HttpContextAccessor
+@inject NavigationManager NavigationManager
+@using Microsoft.AspNetCore.Authentication
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authorization
+@using ProjectManager.Services
+
+<PageTitle>Project Manager</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>My Projects</h1>
+    <button class="btn btn-primary" disabled style="opacity: 0.6">
+        Create Project
+        <small class="d-block">(Coming Soon)</small>
+    </button>
+</div>
+
+@if (_loading)
+{
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+}
+else if (_error != null)
+{
+    <div class="alert alert-danger">
+        @_error
+    </div>
+}
+else if (_repositories?.Any() != true)
+{
+    <div class="alert alert-info">
+        No repositories found.
+    </div>
+}
+else
+{
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+        @foreach (var repo in _repositories)
+        {
+            <div class="col">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">@repo.Name</h5>
+                        <p class="card-text">
+                            @(string.IsNullOrEmpty(repo.Description) ? "No description available" : repo.Description)
+                        </p>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="badge bg-@(repo.Private ? "danger" : "success")">
+                                @(repo.Private ? "Private" : "Public")
+                            </span>
+                            <div>
+                                <button class="btn btn-outline-primary btn-sm me-2" 
+                                        @onclick="() => NavigateToProject(repo.Name)">
+                                    View Details
+                                </button>
+                                <a href="@repo.HtmlUrl" target="_blank" class="btn btn-primary btn-sm">
+                                    Open in GitHub
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private IEnumerable<GitHubRepo>? _repositories;
+    private bool _loading = true;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var accessToken = await HttpContextAccessor.HttpContext!
+                .GetTokenAsync("access_token");
+
+            if (string.IsNullOrEmpty(accessToken))
+            {
+                _error = "Could not get access token";
+                return;
+            }
+
+            _repositories = await GitHubService.GetUserRepositoriesAsync(accessToken);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error loading repositories: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void NavigateToProject(string projectName)
+    {
+        NavigationManager.NavigateTo($"/app/{projectName}");
+    }
+}

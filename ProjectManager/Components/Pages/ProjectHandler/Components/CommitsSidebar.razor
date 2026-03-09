@@ -1,0 +1,98 @@
+﻿@using Microsoft.AspNetCore.Authentication
+@using ProjectManager.Services
+<div style="flex:0 0 @(Width + "px"); background: #f9f9f9; overflow-y:auto; position:relative;"
+     class="border-end commits-sidebar"
+     @ref="SidebarRef">
+    @if (_loading)
+    {
+        <div class="p-3 d-flex justify-content-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    }
+    else if (_error != null)
+    {
+        <div class="alert alert-danger m-3">
+            @_error
+        </div>
+    }
+    else if (_commits?.Any() == true)
+    {
+        <div class="list-group list-group-flush">
+            @foreach (var commit in _commits)
+            {
+                <div class="list-group-item" style="border-bottom:1px solid #eee;">
+                    <div class="d-flex align-items-center">
+                        <img src="https://github.com/@(commit.Author.Login).png"
+                             alt="@commit.Author.Login"
+                             class="rounded-circle"
+                             style="width: 32px; height: 32px;" />
+                        <div class="ms-3">
+                            <h6 class="mb-0">@commit.Commit.Message</h6>
+                            <small class="text-muted">
+                                by @commit.Author.Login on @commit.Commit.Author.Date.ToString("MMM dd, yyyy HH:mm")
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <p class="p-3">No commits found</p>
+    }
+</div>
+
+<style>
+    .commits-sidebar {
+        scrollbar-width: none; /* Firefox */
+        -ms-overflow-style: none; /* IE and Edge */
+    }
+
+        .commits-sidebar::-webkit-scrollbar {
+            display: none; /* Chrome, Safari, Opera */
+        }
+
+    .list-group-item {
+        background: transparent;
+    }
+</style>
+
+@code {
+    [Parameter] public int Width { get; set; }
+    [Parameter] public string? ProjectName { get; set; }
+    [Parameter] public IGitHubService GitHubService { get; set; } = default!;
+    [Parameter] public IHttpContextAccessor HttpContextAccessor { get; set; } = default!;
+
+    private bool _loading = true;
+    private string? _error;
+    private IEnumerable<GitHubCommit>? _commits;
+    private ElementReference SidebarRef;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var accessToken = await HttpContextAccessor.HttpContext!
+                .GetTokenAsync("access_token");
+
+            if (string.IsNullOrEmpty(accessToken) || ProjectName == null)
+            {
+                _error = "Invalid project or access token";
+                return;
+            }
+
+            _commits = await GitHubService.GetRepositoryCommitsAsync(accessToken, ProjectName);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error loading commits: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

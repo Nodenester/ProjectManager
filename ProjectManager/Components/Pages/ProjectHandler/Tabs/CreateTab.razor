@@ -1,0 +1,262 @@
+﻿@using Microsoft.AspNetCore.Authentication
+@using ProjectManager.Services
+
+<div class="row g-4">
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Project Structure</h5>
+                <div>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="RefreshContents">
+                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                    </button>
+                </div>
+            </div>
+            <div class="card-body" style="max-height: 600px; overflow-y: auto;">
+                @if (RootContents == null)
+                {
+                    <div class="d-flex justify-content-center p-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="file-tree">
+                        @foreach (var item in RootContents.OrderByDescending(x => x.Type).ThenBy(x => x.Name))
+                        {
+                            @RenderFileTreeItem(item, 0)
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Active Development</h5>
+                <button class="btn btn-sm btn-success">
+                    <i class="bi bi-play-fill"></i> Auto-Run Tasks
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="bg-light p-3 rounded mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-arrow-repeat spin me-2"></i>
+                            <span class="fw-bold">Setting up Authentication</span>
+                        </div>
+                        <span class="badge bg-primary">AuthBot</span>
+                    </div>
+                    <div class="progress mb-2" style="height: 6px;">
+                        <div class="progress-bar" style="width: 65%"></div>
+                    </div>
+                    <div class="bg-white p-2 rounded small">
+                        <div>Creating OAuth routes...</div>
+                        <div>Implementing callback handlers...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Task Queue</h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group list-group-flush">
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="fw-bold">Create Login UI</span>
+                            <span class="badge bg-secondary">Phase 1</span>
+                        </div>
+                        <small class="text-muted">Estimated: 5-10 min</small>
+                    </div>
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="fw-bold">Setup Form Validation</span>
+                            <span class="badge bg-secondary">Phase 1</span>
+                        </div>
+                        <small class="text-muted">Estimated: 3-5 min</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0">File Details</h5>
+            </div>
+            <div class="card-body">
+                <h6 class="mb-2">login.tsx</h6>
+                <div class="mb-3">
+                    <div class="fw-bold small mb-1">Functions:</div>
+                    <div class="bg-light p-2 rounded small">
+                        <div class="mb-2">
+                            <div class="fw-bold">handleLogin()</div>
+                            <div class="text-muted">Handles user authentication process</div>
+                            <div>Returns: Promise&#x3C;AuthResult&#x3E;</div>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <div class="fw-bold small mb-1">Dependencies:</div>
+                    <div class="bg-light p-2 rounded small">
+                        <div>- validateCredentials</div>
+                        <div>- createSession</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? ProjectName { get; set; }
+    [Parameter] public IEnumerable<GitHubContent>? RootContents { get; set; }
+    [Parameter] public IGitHubService GitHubService { get; set; } = default!;
+    [Parameter] public IHttpContextAccessor ContextAccessor { get; set; } = default!;
+
+    private Dictionary<string, bool> _expandedPaths = new();
+    private Dictionary<string, IEnumerable<GitHubContent>> _pathContents = new();
+
+    private async Task ToggleDirectory(string path)
+    {
+        if (!_expandedPaths.ContainsKey(path))
+        {
+            _expandedPaths[path] = true;
+            try
+            {
+                var contents = await GitHubService.GetRepositoryContentsAsync(
+                    await ContextAccessor.HttpContext!.GetTokenAsync("access_token") ?? "",
+                    ProjectName ?? "",
+                    path);
+
+                _pathContents[path] = contents;
+            }
+            catch
+            {
+                _expandedPaths[path] = false;
+            }
+        }
+        else
+        {
+            _expandedPaths[path] = !_expandedPaths[path];
+        }
+    }
+
+    private string GetFileIcon(string type, string name)
+    {
+        if (type == "dir") return "bi-folder";
+
+        return Path.GetExtension(name).ToLower() switch
+        {
+            ".cs" => "bi-file-earmark-code",
+            ".js" => "bi-filetype-js",
+            ".css" => "bi-filetype-css",
+            ".html" => "bi-filetype-html",
+            ".json" => "bi-filetype-json",
+            ".md" => "bi-markdown",
+            ".jpg" or ".png" or ".gif" => "bi-file-image",
+            _ => "bi-file-earmark"
+        };
+    }
+
+    private RenderFragment RenderFileTreeItem(GitHubContent item, int level) => builder =>
+    {
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "file-tree-item");
+        builder.AddAttribute(2, "style", $"padding-left: {level * 1.25}rem");
+
+        builder.OpenElement(3, "div");
+        builder.AddAttribute(4, "class", $"d-flex align-items-center py-2 px-2 rounded {(item.Type == "dir" ? "cursor-pointer" : "")} hover-bg-light");
+        if (item.Type == "dir")
+        {
+            builder.AddAttribute(5, "onclick", EventCallback.Factory.Create(this, () => ToggleDirectory(item.Path)));
+        }
+
+        if (item.Type == "dir")
+        {
+            builder.OpenElement(6, "i");
+            builder.AddAttribute(7, "class", $"bi {(_expandedPaths.GetValueOrDefault(item.Path) ? "bi-chevron-down" : "bi-chevron-right")} me-2");
+            builder.CloseElement();
+        }
+
+        builder.OpenElement(8, "i");
+        builder.AddAttribute(9, "class", $"{GetFileIcon(item.Type, item.Name)} me-2");
+        builder.CloseElement();
+
+        builder.OpenElement(10, "span");
+        builder.AddContent(11, item.Name);
+        builder.CloseElement();
+
+        builder.CloseElement();
+
+        if (item.Type == "dir" && _expandedPaths.GetValueOrDefault(item.Path) && _pathContents.ContainsKey(item.Path))
+        {
+            foreach (var child in _pathContents[item.Path].OrderByDescending(x => x.Type).ThenBy(x => x.Name))
+            {
+                builder.AddContent(12, RenderFileTreeItem(child, level + 1));
+            }
+        }
+
+        builder.CloseElement();
+    };
+
+    private async Task RefreshContents()
+    {
+        // Implement refresh logic here
+        _expandedPaths.Clear();
+        _pathContents.Clear();
+        StateHasChanged();
+    }
+}
+
+<style>
+    .file-tree {
+        font-size: 0.9rem;
+    }
+
+    .file-tree-item {
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+        .file-tree-item:last-child {
+            border-bottom: none;
+        }
+
+    .hover-bg-light:hover {
+        background-color: rgba(0,0,0,0.05);
+    }
+
+    .cursor-pointer {
+        cursor: pointer;
+    }
+
+    .bi-folder {
+        color: #ffd700;
+    }
+
+    .bi-file-earmark-code {
+        color: #007acc;
+    }
+
+    .bi-filetype-json {
+        color: #5c2d91;
+    }
+
+    .bi-markdown {
+        color: #444;
+    }
+
+    .bi-file-image {
+        color: #2ea44f;
+    }
+
+    .bi-file-earmark {
+        color: #666;
+    }
+</style>

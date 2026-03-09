@@ -1,0 +1,63 @@
+﻿<div class="d-flex align-items-center justify-content-between px-3 py-2" style="background-color:#fff; flex:0 0 auto;">
+    <div>
+        <button class="btn btn-link text-dark" @onclick="OnBack">
+            <i class="bi bi-arrow-left"></i> Back to Projects
+        </button>
+    </div>
+
+    <div class="d-flex justify-content-center">
+        <ul class="nav fs-4 d-flex align-items-center">
+            <li class="nav-item">
+                <a class="nav-link text-dark @(CurrentTab == "Create" ? "fw-bold" : "")"
+                   style="cursor:pointer;"
+                   @onclick="@(() => OnTabChange.InvokeAsync("Create"))">Create</a>
+            </li>
+            <li class="nav-item">
+                <span class="nav-link text-dark">|</span>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link text-dark @(CurrentTab == "Test" ? "fw-bold" : "")"
+                   style="cursor:pointer;"
+                   @onclick="@(() => OnTabChange.InvokeAsync("Test"))">Test</a>
+            </li>
+            <li class="nav-item">
+                <span class="nav-link text-dark">|</span>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link text-dark @(CurrentTab == "Info" ? "fw-bold" : "")"
+                   style="cursor:pointer;"
+                   @onclick="@(() => OnTabChange.InvokeAsync("Info"))">Info</a>
+            </li>
+        </ul>
+    </div>
+
+    <div>
+        <span class="fs-4 fw-bold">@ProjectName</span>
+    </div>
+</div>
+
+<style>
+    .nav {
+        margin: 0;
+        padding: 0;
+    }
+
+    .nav-item {
+        display: flex;
+        align-items: center;
+    }
+
+    .nav-link {
+        padding: 0.5rem 1rem;
+        height: 100%;
+        display: flex;
+        align-items: center;
+    }
+</style>
+
+@code {
+    [Parameter] public string? ProjectName { get; set; }
+    [Parameter] public string CurrentTab { get; set; } = "Create";
+    [Parameter] public EventCallback<string> OnTabChange { get; set; }
+    [Parameter] public EventCallback OnBack { get; set; }
+}
